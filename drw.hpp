@@ -4,17 +4,9 @@
 
 #include "cursor.hpp"
 #include "display.hpp"
+#include "font.hpp"
 
 #include <memory>
-
-typedef struct Fnt
-{
-    Display     *dpy;
-    unsigned int h;
-    XftFont     *xfont;
-    FcPattern   *pattern;
-    struct Fnt  *next;
-} Fnt;
 
 enum
 {
@@ -26,14 +18,14 @@ typedef XftColor Clr;
 
 typedef struct
 {
-    unsigned int w, h;
-    Display     *dpy;
-    int          screen;
-    Window       root;
-    Drawable     drawable;
-    GC           gc;
-    Clr         *scheme;
-    Fnt         *fonts;
+    unsigned int              w, h;
+    Display                  *dpy;
+    int                       screen;
+    Window                    root;
+    Drawable                  drawable;
+    GC                        gc;
+    Clr                      *scheme;
+    std::shared_ptr<zi::font> fonts;
 } Drw;
 
 /* Drawable abstraction */
@@ -43,11 +35,8 @@ void drw_resize(Drw *drw, unsigned int w, unsigned int h);
 void drw_free(Drw *drw);
 
 /* Fnt abstraction */
-Fnt *drw_fontset_create(Drw *drw, const char *fonts[], size_t fontcount);
-void drw_fontset_free(Fnt *set);
+bool drw_fontset_create(Drw *drw, const char *fonts[], size_t fontcount);
 unsigned int drw_fontset_getwidth(Drw *drw, const char *text);
-void         drw_font_getexts(Fnt *font, const char *text, unsigned int len,
-                              unsigned int *w, unsigned int *h);
 
 /* Colorscheme abstraction */
 // void drw_clr_create(Drw *drw, Clr *dest, const char *clrname);
@@ -59,8 +48,8 @@ std::unique_ptr<zi::cursor> drw_cur_create(Drw *drw, int shape);
 void drw_cur_free(Drw *drw, std::unique_ptr<zi::cursor> const &cursor);
 
 /* Drawing context manipulation */
-void drw_setfontset(Drw *drw, Fnt *set);
-void drw_setscheme(Drw *drw, std::unique_ptr<Clr[]> const& scm);
+void drw_setfontset(Drw *drw, std::shared_ptr<zi::font> set);
+void drw_setscheme(Drw *drw, std::unique_ptr<Clr[]> const &scm);
 
 /* Drawing functions */
 void drw_rect(Drw *drw, int x, int y, unsigned int w, unsigned int h,

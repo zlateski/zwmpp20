@@ -815,8 +815,8 @@ Monitor *dirtomon(int dir)
 void drawbar(Monitor *m)
 {
     int          x, w, tw = 0;
-    int          boxs = drw->fonts->h / 9;
-    int          boxw = drw->fonts->h / 6 + 2;
+    int          boxs = drw->fonts->full_height() / 9;
+    int          boxw = drw->fonts->full_height() / 6 + 2;
     unsigned int i, occ = 0, urg = 0;
     Client      *c;
 
@@ -1843,8 +1843,8 @@ void setup(void)
         die("no fonts could be loaded.");
     }
 
-    lrpad = drw->fonts->h;
-    bh    = drw->fonts->h + 2;
+    lrpad = drw->fonts->full_height();
+    bh    = drw->fonts->full_height() + 2;
 
     updategeom();
 
