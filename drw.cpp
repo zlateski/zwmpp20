@@ -218,20 +218,41 @@ void drw_clr_create(Drw *drw, Clr *dest, const char *clrname)
         die("error, cannot allocate color '%s'", clrname);
 }
 
-/* Wrapper to create color schemes. The caller has to call free(3) on the
+/* Wrapper to create color schemes. The caller (zi: 12/25/21 - it
+ * doesn't have to do that anymore) has to call free(3) on the
  * returned color scheme when done using it. */
-Clr *drw_scm_create(Drw *drw, const char *clrnames[], size_t clrcount)
+std::unique_ptr<Clr[]> drw_scm_create(Drw *drw, char const *clrnames[],
+                                      std::size_t clrcount)
 {
-    size_t i;
-    Clr   *ret;
+    auto drw_clr_create = [](Drw *drw, Clr *dest, char const *clrname)
+    {
+        if (!drw || !dest || !clrname)
+        {
+            return;
+        }
 
-    /* need at least two colors for a scheme */
+        if (!XftColorAllocName(drw->dpy, DefaultVisual(drw->dpy, drw->screen),
+                               DefaultColormap(drw->dpy, drw->screen), clrname,
+                               dest))
+        {
+            zi::die("error, cannot allocate color '%s'", clrname);
+        }
+    };
+
+    std::unique_ptr<Clr[]> ret;
+
+    // Need at least two colors for a scheme
     if (!drw || !clrnames || clrcount < 2 ||
-        !(ret = zi::safe_calloc<Clr>(clrcount)))
-        return NULL;
+        !(ret = std::make_unique<Clr[]>(clrcount)))
+    {
+        return nullptr;
+    }
 
-    for (i = 0; i < clrcount; i++)
-        drw_clr_create(drw, &ret[i], clrnames[i]);
+    for (std::size_t i = 0; i < clrcount; i++)
+    {
+        drw_clr_create(drw, std::addressof(ret[i]), clrnames[i]);
+    }
+
     return ret;
 }
 
@@ -241,10 +262,12 @@ void drw_setfontset(Drw *drw, Fnt *set)
         drw->fonts = set;
 }
 
-void drw_setscheme(Drw *drw, Clr *scm)
+void drw_setscheme(Drw *drw, std::unique_ptr<Clr[]> const &scm)
 {
     if (drw)
-        drw->scheme = scm;
+    {
+        drw->scheme = scm.get();
+    }
 }
 
 void drw_rect(Drw *drw, int x, int y, unsigned int w, unsigned int h,
@@ -454,38 +477,20 @@ void drw_font_getexts(Fnt *font, const char *text, unsigned int len,
         *h = font->h;
 }
 
-Cur *drw_cur_create(Drw *drw, int shape)
+std::unique_ptr<zi::cursor> drw_cur_create(Drw *drw, int shape)
 {
-    Cur *cur;
-
-    if (!drw || !(cur = zi::safe_calloc<Cur>(1)))
-        return NULL;
-
-    cur->cursor = XCreateFontCursor(drw->dpy, shape);
-
-    return cur;
-}
-
-void drw_cur_free(Drw *drw, Cur *cursor)
-{
-    if (!cursor)
-        return;
-
-    XFreeCursor(drw->dpy, cursor->cursor);
-    free(cursor);
-}
-
-namespace zi
-{
-
-void drawable::fontset_free(Fnt *font)
-{
-    while (font)
+    if (!drw)
     {
-        auto n = font->next;
-        xfont_free(font);
-        font = n;
+        return nullptr;
+    }
+
+    return std::make_unique<zi::cursor>(XCreateFontCursor(drw->dpy, shape));
+}
+
+void drw_cur_free(Drw *drw, std::unique_ptr<zi::cursor> const &cursor)
+{
+    if (cursor)
+    {
+        XFreeCursor(drw->dpy, cursor->xhandle());
     }
 }
-
-} // namespace zi

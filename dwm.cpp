@@ -339,11 +339,13 @@ static void initialize_handlers()
     handler[UnmapNotify]      = unmapnotify;
 };
 
-static Atom  wmatom[WMLast], netatom[NetLast];
-static int   restart = 0;
-static int   running = 1;
-static Cur  *cursor[CurLast];
-static Clr **scheme;
+static Atom wmatom[WMLast], netatom[NetLast];
+static int  restart = 0;
+static int  running = 1;
+
+static std::array<std::unique_ptr<zi::cursor>, CurLast> cursors;
+
+static std::unique_ptr<std::unique_ptr<Clr[]>[]> scheme;
 // static Display *dpy;
 
 static std::unique_ptr<zi::display> display;
@@ -576,9 +578,9 @@ void cleanup(void)
     while (mons)
         cleanupmon(mons);
     for (i = 0; i < CurLast; i++)
-        drw_cur_free(drw, cursor[i]);
-    for (i = 0; i < std::size(colors); i++)
-        free(scheme[i]);
+        drw_cur_free(drw, cursors[i]);
+    // for (i = 0; i < std::size(colors); i++)
+    //     free(scheme[i]);
     XDestroyWindow(display->xhandle(), wmcheckwin);
     drw_free(drw);
     display->sync();
@@ -1296,7 +1298,7 @@ void movemouse(const Arg *)
     ocy = c->y;
     if (XGrabPointer(display->xhandle(), display->root_window(), false,
                      MOUSEMASK, GrabModeAsync, GrabModeAsync, None,
-                     cursor[CurMove]->cursor, CurrentTime) != GrabSuccess)
+                     cursors[CurMove]->xhandle(), CurrentTime) != GrabSuccess)
         return;
     if (!getrootptr(&x, &y))
         return;
@@ -1481,7 +1483,7 @@ void resizemouse(const Arg *)
     ocy = c->y;
     if (XGrabPointer(display->xhandle(), display->root_window(), false,
                      MOUSEMASK, GrabModeAsync, GrabModeAsync, None,
-                     cursor[CurResize]->cursor, CurrentTime) != GrabSuccess)
+                     cursors[CurResize]->xhandle(), CurrentTime) != GrabSuccess)
         return;
     XWarpPointer(display->xhandle(), None, c->win, 0, 0, 0, 0, c->w + c->bw - 1,
                  c->h + c->bw - 1);
@@ -1873,11 +1875,11 @@ void setup(void)
     netatom[NetClientList] =
         XInternAtom(display->xhandle(), "_NET_CLIENT_LIST", false);
     /* init cursors */
-    cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
-    cursor[CurResize] = drw_cur_create(drw, XC_sizing);
-    cursor[CurMove]   = drw_cur_create(drw, XC_fleur);
+    cursors[CurNormal] = drw_cur_create(drw, XC_left_ptr);
+    cursors[CurResize] = drw_cur_create(drw, XC_sizing);
+    cursors[CurMove]   = drw_cur_create(drw, XC_fleur);
     /* init appearance */
-    scheme = zi::safe_calloc<Clr *>(std::size(colors));
+    scheme = std::make_unique<std::unique_ptr<Clr[]>[]>(std::size(colors));
 
     for (i = 0; std::cmp_less(i, std::size(colors)); i++)
     {
@@ -1905,7 +1907,7 @@ void setup(void)
     XDeleteProperty(display->xhandle(), display->root_window(),
                     netatom[NetClientList]);
     /* select events */
-    wa.cursor     = cursor[CurNormal]->cursor;
+    wa.cursor     = cursors[CurNormal]->xhandle();
     wa.event_mask = SubstructureRedirectMask | SubstructureNotifyMask |
                     ButtonPressMask | PointerMotionMask | EnterWindowMask |
                     LeaveWindowMask | StructureNotifyMask | PropertyChangeMask;
@@ -2169,7 +2171,8 @@ void updatebars(void)
                           m->by, m->ww, bh, 0, display->default_depth(),
                           CopyFromParent, display->default_visual(),
                           CWOverrideRedirect | CWBackPixmap | CWEventMask, &wa);
-        XDefineCursor(display->xhandle(), m->barwin, cursor[CurNormal]->cursor);
+        XDefineCursor(display->xhandle(), m->barwin,
+                      cursors[CurNormal]->xhandle());
         XMapRaised(display->xhandle(), m->barwin);
         XSetClassHint(display->xhandle(), m->barwin, &ch);
     }
