@@ -72,7 +72,7 @@
 
 #define TAGMASK ((1 << std::size(tags)) - 1)
 
-#define TEXTW(X) (drw_fontset_getwidth(drw, (X)) + lrpad)
+#define TEXTW(X) (drw->fontset_getwidth((X)) + lrpad)
 
 /* enums */
 enum
@@ -350,7 +350,8 @@ static std::unique_ptr<std::unique_ptr<Clr[]>[]> scheme;
 
 static std::unique_ptr<zi::display> display;
 
-static Drw     *drw;
+static std::unique_ptr<zi::drawable> drw;
+
 static Monitor *mons, *selmon;
 static Window   wmcheckwin;
 
@@ -578,11 +579,11 @@ void cleanup(void)
     while (mons)
         cleanupmon(mons);
     for (i = 0; i < CurLast; i++)
-        drw_cur_free(drw, cursors[i]);
+        drw->cur_free(cursors[i]);
     // for (i = 0; i < std::size(colors); i++)
     //     free(scheme[i]);
     XDestroyWindow(display->xhandle(), wmcheckwin);
-    drw_free(drw);
+    // drw_free(drw);
     display->sync();
     XSetInputFocus(display->xhandle(), PointerRoot, RevertToPointerRoot,
                    CurrentTime);
@@ -664,7 +665,7 @@ void configurenotify(XEvent *e)
         sh    = ev->height;
         if (updategeom() || dirty)
         {
-            drw_resize(drw, sw, bh);
+            drw->resize(sw, bh);
             updatebars();
             for (m = mons; m; m = m->next)
             {
@@ -823,9 +824,9 @@ void drawbar(Monitor *m)
     /* draw status first so it can be overdrawn by tags later */
     if (m == selmon)
     { /* status is only drawn on selected monitor */
-        drw_setscheme(drw, scheme[SchemeNorm]);
+        drw->setscheme(scheme[SchemeNorm]);
         tw = TEXTW(stext) - lrpad + 2; /* 2px right padding */
-        drw_text(drw, m->ww - tw, 0, tw, bh, 0, stext, 0);
+        drw->text(m->ww - tw, 0, tw, bh, 0, stext, 0);
     }
 
     for (c = m->clients; c; c = c->next)
@@ -838,36 +839,35 @@ void drawbar(Monitor *m)
     for (i = 0; i < std::size(tags); i++)
     {
         w = TEXTW(tags[i]);
-        drw_setscheme(
-            drw,
+        drw->setscheme(
             scheme[m->tagset[m->seltags] & 1 << i ? SchemeSel : SchemeNorm]);
-        drw_text(drw, x, 0, w, bh, lrpad / 2, tags[i], urg & 1 << i);
+        drw->text(x, 0, w, bh, lrpad / 2, tags[i], urg & 1 << i);
         if (occ & 1 << i)
-            drw_rect(drw, x + boxs, boxs, boxw, boxw,
-                     m == selmon && selmon->sel && selmon->sel->tags & 1 << i,
-                     urg & 1 << i);
+            drw->rect(x + boxs, boxs, boxw, boxw,
+                      m == selmon && selmon->sel && selmon->sel->tags & 1 << i,
+                      urg & 1 << i);
         x += w;
     }
     w = blw = TEXTW(m->ltsymbol);
-    drw_setscheme(drw, scheme[SchemeNorm]);
-    x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
+    drw->setscheme(scheme[SchemeNorm]);
+    x = drw->text(x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
 
     if ((w = m->ww - tw - x) > bh)
     {
         if (m->sel)
         {
-            drw_setscheme(drw, scheme[m == selmon ? SchemeSel : SchemeNorm]);
-            drw_text(drw, x, 0, w, bh, lrpad / 2, m->sel->name, 0);
+            drw->setscheme(scheme[m == selmon ? SchemeSel : SchemeNorm]);
+            drw->text(x, 0, w, bh, lrpad / 2, m->sel->name, 0);
             if (m->sel->isfloating)
-                drw_rect(drw, x + boxs, boxs, boxw, boxw, m->sel->isfixed, 0);
+                drw->rect(x + boxs, boxs, boxw, boxw, m->sel->isfixed, 0);
         }
         else
         {
-            drw_setscheme(drw, scheme[SchemeNorm]);
-            drw_rect(drw, x, 0, w, bh, 1, 1);
+            drw->setscheme(scheme[SchemeNorm]);
+            drw->rect(x, 0, w, bh, 1, 1);
         }
     }
-    drw_map(drw, m->barwin, 0, 0, m->ww, bh);
+    drw->map(m->barwin, 0, 0, m->ww, bh);
 }
 
 void drawbars(void)
@@ -1835,10 +1835,10 @@ void setup(void)
     sh = display->height(); // DisplayHeight(display->xhandle(), screen);
     // root = display->root_window(); // RootWindow(display->xhandle(),
     // display->screen());
-    drw = drw_create(display->xhandle(), display->screen(),
-                     display->root_window(), sw, sh);
+    drw = std::make_unique<zi::drawable>(display->xhandle(), display->screen(),
+                                         display->root_window(), sw, sh);
 
-    if (!drw_fontset_create(drw, fonts, std::size(fonts)))
+    if (!drw->fontset_create(fonts, std::size(fonts)))
     {
         die("no fonts could be loaded.");
     }
@@ -1875,15 +1875,15 @@ void setup(void)
     netatom[NetClientList] =
         XInternAtom(display->xhandle(), "_NET_CLIENT_LIST", false);
     /* init cursors */
-    cursors[CurNormal] = drw_cur_create(drw, XC_left_ptr);
-    cursors[CurResize] = drw_cur_create(drw, XC_sizing);
-    cursors[CurMove]   = drw_cur_create(drw, XC_fleur);
+    cursors[CurNormal] = drw->cur_create(XC_left_ptr);
+    cursors[CurResize] = drw->cur_create(XC_sizing);
+    cursors[CurMove]   = drw->cur_create(XC_fleur);
     /* init appearance */
     scheme = std::make_unique<std::unique_ptr<Clr[]>[]>(std::size(colors));
 
     for (i = 0; std::cmp_less(i, std::size(colors)); i++)
     {
-        scheme[i] = drw_scm_create(drw, colors[i], 3);
+        scheme[i] = drw->scm_create(colors[i], 3);
     }
     /* init bars */
     updatebars();
